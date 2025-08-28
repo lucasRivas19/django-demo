@@ -1,0 +1,96 @@
+pipeline {
+  agent any
+
+  options {
+    disableConcurrentBuilds()                      // evita 2 pipelines en paralelo del mismo job
+    buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '20'))
+    timeout(time: 20, unit: 'MINUTES')            // corta cuelgues
+    ansiColor('xterm')                             // logs legibles
+    timestamps()
+    skipDefaultCheckout(true)                      // checkout controlado
+  }
+
+  environment {
+    APP_NAME     = 'django-demo'
+    DEPLOY_HOST  = '192.168.130.158'
+    DEPLOY_USER  = 'root'                          // ⚠️ luego: 'deploy'
+    APP_DIR      = "/opt/${APP_NAME}/src"
+    // endurece shell
+    SHELL        = '/bin/bash'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        // SCM del multibranch (no imprime URL/credenciales)
+        checkout scm
+      }
+    }
+
+    stage('Lint/Build quick checks') {
+      steps {
+        sh '''
+          set -euo pipefail
+          test -f Dockerfile
+          test -f docker-compose.yml
+          # Si tenés requirements.txt:
+          test -f requirements.txt || true
+        '''
+      }
+    }
+
+    stage('Deploy (solo TAG vX.Y.Z)') {
+      when {
+        allOf {
+          buildingTag()
+          expression { return env.BRANCH_NAME ==~ /^v\\d+\\.\\d+\\.\\d+$/ } // solo tags tipo v1.2.3
+        }
+      }
+      options {
+        retry(2)                                    // reintenta en fallos transitorios
+      }
+      steps {
+        // lock evita que 2 deploys (tags) pisen el mismo host (necesita plugin Lockable Resources)
+        lock(resource: "deploy-${env.DEPLOY_HOST}") {
+          sshagent(credentials: ['deploy_root_ssh']) {
+            sh '''
+              set -euo pipefail
+
+              # endurecer SSH y fallar si known_hosts no matchea
+              SSH_OPTS="-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/var/jenkins_home/.ssh/known_hosts"
+
+              # 1) preparar repo si es la primera vez
+              ssh $SSH_OPTS ${DEPLOY_USER}@${DEPLOY_HOST} "bash -lc '
+                set -euo pipefail
+                mkdir -p ${APP_DIR%/src}
+                if [ ! -d ${APP_DIR}/.git ]; then
+                  cd ${APP_DIR%/src}
+                  # Clona usando la misma URL del job (no imprime credenciales)
+                  git clone \"$(git config --get remote.origin.url)\" src
+                fi
+              '"
+
+              # 2) checkout inmutable al TAG y despliegue con compose
+              ssh $SSH_OPTS ${DEPLOY_USER}@${DEPLOY_HOST} "bash -lc '
+                set -euo pipefail
+                cd ${APP_DIR}
+                git fetch --all --tags --prune
+                git checkout -B deploy-${BRANCH_NAME} refs/tags/${BRANCH_NAME}
+                # Construcción y arranque atómicos
+                docker compose down
+                docker compose up -d --build
+              '"
+            '''
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    success { echo "✅ OK: ${env.BRANCH_NAME}" }
+    failure { echo "❌ FAIL: ${env.BRANCH_NAME}" }
+    always  { echo "🏁 Pipeline end: ${env.BRANCH_NAME}" }
+  }
+}
