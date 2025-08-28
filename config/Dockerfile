@@ -7,6 +7,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR $APP_HOME
 
+# 👇 Añadí esta línea
+ENV PYTHONPATH="${PYTHONPATH}:/app/src"
+
+
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-traditional \
  && rm -rf /var/lib/apt/lists/*
@@ -20,4 +25,4 @@ COPY . .
 EXPOSE 5050
 
 # espera a que la DB esté (si usás sqlite no hace falta, lo dejamos igual)
-CMD ["gunicorn", "src.config.wsgi:application", "--bind", "0.0.0.0:5050", "--workers", "2"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:5050", "--workers", "2"]
