@@ -7,11 +7,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR $APP_HOME
 
-# 👇 Añadí esta línea
-ENV PYTHONPATH="${PYTHONPATH}:/app/src"
-
-
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-traditional \
  && rm -rf /var/lib/apt/lists/*
