@@ -18,23 +18,23 @@ pipeline {
   stages {
     stage('Checkout SCM (informativo)') {
       steps {
-        ansiColor('xterm') {
+        
           checkout scm
           sh 'echo "Ref actual: ${GIT_COMMIT}  Branch/Tag: ${BRANCH_NAME}"'
-        }
+        
       }
     }
 
     stage('Sanity checks') {
       steps {
-        ansiColor('xterm') {
+        
           sh '''
             set -euo pipefail
             test -d "${APP_DIR}" || { echo "No existe ${APP_DIR}. Clonalo una vez: git clone <ssh> ${APP_DIR}"; exit 1; }
             test -f "${APP_DIR}/docker-compose.yml"
             test -f "${APP_DIR}/Dockerfile"
           '''
-        }
+        
       }
     }
 
@@ -49,7 +49,7 @@ pipeline {
       steps {
         lock(resource: "deploy-local-${env.APP_NAME}") {
           dir("${APP_DIR}") {
-            ansiColor('xterm') {
+        
               sh '''
                 set -euo pipefail
 
@@ -68,7 +68,7 @@ pipeline {
                 docker compose ps
                 docker images | head -n 20
               '''
-            }
+            
           }
         }
       }
