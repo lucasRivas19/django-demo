@@ -1,4 +1,4 @@
 from django.http import HttpResponse
 
 def hello(request):
-    return HttpResponse("Hola. es la prueba de Deploy usando Jenkins. 👋")
+    return HttpResponse("Hi!!. Es la prueba de Deploy usando Jenkins. 👋")
