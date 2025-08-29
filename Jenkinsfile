@@ -6,13 +6,12 @@ pipeline {
     buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '20'))
     timeout(time: 20, unit: 'MINUTES')
     timestamps()
-    skipDefaultCheckout(true)                          // hacemos checkout a mano
+    skipDefaultCheckout(false)                         // dejamos que Jenkins haga el checkout normal
   }
 
   environment {
-    APP_NAME    = 'django-demo'
-    APP_DIR     = "/opt/${APP_NAME}/src"               // repo local en el MISMO server de Jenkins
-    SHELL       = '/bin/bash'
+    APP_NAME = 'django-demo'
+    APP_DIR  = "${WORKSPACE}"   // Jenkins workspace, no /opt
   }
 
   stages {
@@ -21,6 +20,7 @@ pipeline {
         checkout scm
         sh '''#!/bin/bash
           echo "Ref actual: ${GIT_COMMIT}  Branch/Tag: ${BRANCH_NAME}"
+          ls -la
         '''
       }
     }
@@ -29,7 +29,6 @@ pipeline {
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
-          test -d "${APP_DIR}" || { echo "No existe ${APP_DIR}. Clonalo una vez: git clone <ssh> ${APP_DIR}"; exit 1; }
           test -f "${APP_DIR}/docker-compose.yml"
           test -f "${APP_DIR}/Dockerfile"
         '''
@@ -39,33 +38,30 @@ pipeline {
     stage('Deploy (solo TAG vX.Y.Z)') {
       when {
         allOf {
-          buildingTag()                                 // solo si el build viene de un tag
+          buildingTag()
           expression { return env.BRANCH_NAME ==~ /^v\\d+\\.\\d+\\.\\d+$/ }  // ej: v1.2.3
         }
       }
-      options { retry(2) }                               // reintento ante fallos transitorios
+      options { retry(2) }
       steps {
-        lock(resource: "deploy-local-${env.APP_NAME}") {
-          dir("${APP_DIR}") {
-            sh '''#!/bin/bash
-              set -euo pipefail
+        dir("${APP_DIR}") {
+          sh '''#!/bin/bash
+            set -euo pipefail
 
-              # Asegurar origen y traer tags
-              git remote -v
-              git fetch --all --tags --prune
+            # Info de git
+            git remote -v
+            git fetch --all --tags --prune
 
-              # Checkout inmutable al TAG (rama efímera pegada al tag)
-              git checkout -B "deploy-${BRANCH_NAME}" "refs/tags/${BRANCH_NAME}"
+            # Checkout al tag
+            git checkout -B "deploy-${BRANCH_NAME}" "refs/tags/${BRANCH_NAME}"
 
-              # Deploy con compose (sin romper si no estaba corriendo)
-              docker compose down || true
-              docker compose up -d --build
+            # Deploy con compose
+            docker compose down || true
+            docker compose up -d --build
 
-              # Info rápida
-              docker compose ps
-              docker images | head -n 20
-            '''
-          }
+            docker compose ps
+            docker images | head -n 20
+          '''
         }
       }
     }
