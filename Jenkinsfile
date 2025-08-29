@@ -2,23 +2,24 @@ pipeline {
   agent any
 
   options {
-    disableConcurrentBuilds()                          // no permite dos deploys pisándose
+    disableConcurrentBuilds()                          
     buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '20'))
     timeout(time: 20, unit: 'MINUTES')
     timestamps()
-    skipDefaultCheckout(false)                         // dejamos que Jenkins haga el checkout normal
+    skipDefaultCheckout(true)                          
   }
 
   environment {
-    APP_NAME = 'django-demo'
-    APP_DIR  = "${WORKSPACE}"   // Jenkins workspace, no /opt
+    APP_NAME    = 'django-demo'
+    APP_DIR     = "/opt/${APP_NAME}/src"
+    SHELL       = '/bin/bash'
   }
 
   stages {
     stage('Checkout SCM (informativo)') {
       steps {
         checkout scm
-        sh '''#!/bin/bash
+        sh '''
           echo "Ref actual: ${GIT_COMMIT}  Branch/Tag: ${BRANCH_NAME}"
           ls -la
         '''
@@ -27,10 +28,10 @@ pipeline {
 
     stage('Sanity checks') {
       steps {
-        sh '''#!/bin/bash
-          set -euo pipefail
-          test -f "${APP_DIR}/docker-compose.yml"
-          test -f "${APP_DIR}/Dockerfile"
+        sh '''
+          set -eu
+          test -f "docker-compose.yml"
+          test -f "Dockerfile"
         '''
       }
     }
@@ -39,28 +40,24 @@ pipeline {
       when {
         allOf {
           buildingTag()
-          expression { return env.BRANCH_NAME ==~ /^v\\d+\\.\\d+\\.\\d+$/ }  // ej: v1.2.3
+          expression { return env.BRANCH_NAME ==~ /^v\d+\.\d+\.\d+$/ }  // <-- regex corregida
         }
       }
-      options { retry(2) }
       steps {
         dir("${APP_DIR}") {
-          sh '''#!/bin/bash
-            set -euo pipefail
+          sh '''
+            set -eu
 
-            # Info de git
-            git remote -v
+            echo "🔄 Actualizando código en ${APP_DIR}"
             git fetch --all --tags --prune
-
-            # Checkout al tag
             git checkout -B "deploy-${BRANCH_NAME}" "refs/tags/${BRANCH_NAME}"
 
-            # Deploy con compose
+            echo "🚀 Deploy con docker compose"
             docker compose down || true
             docker compose up -d --build
 
+            echo "✅ Contenedores activos:"
             docker compose ps
-            docker images | head -n 20
           '''
         }
       }
