@@ -2,17 +2,15 @@ pipeline {
   agent any
 
   options {
-    disableConcurrentBuilds()                          
+    disableConcurrentBuilds()
     buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '20'))
     timeout(time: 20, unit: 'MINUTES')
     timestamps()
-    skipDefaultCheckout(true)                          
+    skipDefaultCheckout(true)
   }
 
   environment {
-    APP_NAME    = 'django-demo'
-    APP_DIR     = "/opt/${APP_NAME}/src"
-    SHELL       = '/bin/bash'
+    APP_NAME = "django-demo"
   }
 
   stages {
@@ -30,8 +28,8 @@ pipeline {
       steps {
         sh '''
           set -eu
-          test -f "docker-compose.yml"
-          test -f "Dockerfile"
+          test -f docker-compose.yml
+          test -f Dockerfile
         '''
       }
     }
@@ -40,24 +38,21 @@ pipeline {
       when {
         allOf {
           buildingTag()
-          expression { return env.BRANCH_NAME ==~ /^v\d+\.\d+\.\d+$/ }  // <-- regex corregida
+          expression { return env.BRANCH_NAME ==~ /^v\\d+\\.\\d+\\.\\d+$/ }
         }
       }
       steps {
-        dir("${APP_DIR}") {
+        dir("${WORKSPACE}") {
           sh '''
             set -eu
 
-            echo "🔄 Actualizando código en ${APP_DIR}"
-            git fetch --all --tags --prune
-            git checkout -B "deploy-${BRANCH_NAME}" "refs/tags/${BRANCH_NAME}"
+            echo "➡️ Deploy con docker-compose en ${WORKSPACE}"
 
-            echo "🚀 Deploy con docker compose"
             docker compose down || true
             docker compose up -d --build
 
-            echo "✅ Contenedores activos:"
             docker compose ps
+            docker images | head -n 20
           '''
         }
       }
