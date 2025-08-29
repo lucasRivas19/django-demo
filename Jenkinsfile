@@ -36,11 +36,14 @@ pipeline {
 
     stage('Deploy (solo TAG vX.Y.Z)') {
       when {
-        allOf {
-          buildingTag()
-          expression { return env.BRANCH_NAME ==~ /^v\\d+\\.\\d+\\.\\d+$/ }
-        }
-      }
+  allOf {
+    buildingTag()
+    expression { 
+      def name = env.GIT_TAG_NAME ?: env.BRANCH_NAME
+      return name ==~ /^v\d+\.\d+\.\d+$/ 
+    }
+  }
+}
       steps {
         dir("${WORKSPACE}") {
           sh '''
