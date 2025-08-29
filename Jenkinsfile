@@ -2,10 +2,9 @@ pipeline {
   agent any
 
   options {
-    disableConcurrentBuilds()                          // nada de dos deploys pisándose
+    disableConcurrentBuilds()                          // no permite dos deploys pisándose
     buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '20'))
     timeout(time: 20, unit: 'MINUTES')
-    ansiColor('xterm')
     timestamps()
     skipDefaultCheckout(true)                          // hacemos checkout a mano
   }
@@ -19,19 +18,23 @@ pipeline {
   stages {
     stage('Checkout SCM (informativo)') {
       steps {
-        checkout scm
-        sh 'echo "Ref actual: ${GIT_COMMIT}  Branch/Tag: ${BRANCH_NAME}"'
+        ansiColor('xterm') {
+          checkout scm
+          sh 'echo "Ref actual: ${GIT_COMMIT}  Branch/Tag: ${BRANCH_NAME}"'
+        }
       }
     }
 
     stage('Sanity checks') {
       steps {
-        sh '''
-          set -euo pipefail
-          test -d "${APP_DIR}" || { echo "No existe ${APP_DIR}. Clonalo una vez: git clone <ssh> ${APP_DIR}"; exit 1; }
-          test -f "${APP_DIR}/docker-compose.yml"
-          test -f "${APP_DIR}/Dockerfile"
-        '''
+        ansiColor('xterm') {
+          sh '''
+            set -euo pipefail
+            test -d "${APP_DIR}" || { echo "No existe ${APP_DIR}. Clonalo una vez: git clone <ssh> ${APP_DIR}"; exit 1; }
+            test -f "${APP_DIR}/docker-compose.yml"
+            test -f "${APP_DIR}/Dockerfile"
+          '''
+        }
       }
     }
 
@@ -39,27 +42,33 @@ pipeline {
       when {
         allOf {
           buildingTag()                                 // solo si el build viene de un tag
-          expression { return env.BRANCH_NAME ==~ /^v\\d+\\.\\d+\\.\\d+$/ }  // v1.2.3
+          expression { return env.BRANCH_NAME ==~ /^v\\d+\\.\\d+\\.\\d+$/ }  // ej: v1.2.3
         }
       }
       options { retry(2) }                               // reintento ante fallos transitorios
       steps {
         lock(resource: "deploy-local-${env.APP_NAME}") {
           dir("${APP_DIR}") {
-            sh '''
-              set -euo pipefail
+            ansiColor('xterm') {
+              sh '''
+                set -euo pipefail
 
-              git remote -v
-              git fetch --all --tags --prune
+                # Asegurar origen y traer tags
+                git remote -v
+                git fetch --all --tags --prune
 
-              git checkout -B "deploy-${BRANCH_NAME}" "refs/tags/${BRANCH_NAME}"
+                # Checkout inmutable al TAG (rama efímera pegada al tag)
+                git checkout -B "deploy-${BRANCH_NAME}" "refs/tags/${BRANCH_NAME}"
 
-              docker compose down || true
-              docker compose up -d --build
+                # Deploy con compose (sin romper si no estaba corriendo)
+                docker compose down || true
+                docker compose up -d --build
 
-              docker compose ps
-              docker images | head -n 20
-            '''
+                # Info rápida
+                docker compose ps
+                docker images | head -n 20
+              '''
+            }
           }
         }
       }
