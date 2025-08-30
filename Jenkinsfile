@@ -28,9 +28,9 @@ pipeline {
         }
 
         stage('Deploy (solo TAG vX.Y.Z)') {
-            when {
-                expression { env.BRANCH_NAME ==~ /^v\\d+\\.\\d+\\.\\d+$/ }
-            }
+          when {
+              expression { env.BRANCH_NAME ==~ /^v[0-9.]+$/ }
+          }
             steps {
                 dir("${WORKSPACE}") {
                     sh '''
