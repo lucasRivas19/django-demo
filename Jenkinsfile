@@ -34,11 +34,13 @@ pipeline {
             steps {
                 dir("${WORKSPACE}") {
                     sh '''
-                      set -eu
-                      echo "➡️ Deploy con docker-compose en ${WORKSPACE}"
-                      docker compose down || true
+                      echo "➡️ Docker Compose Down"
+                      docker compose down --remove-orphans
+
+                      echo "➡️ Docker Compose Up --build"
                       docker compose up -d --build
                     '''
+
                 }
             }
         }
