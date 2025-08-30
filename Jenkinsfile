@@ -34,11 +34,14 @@ pipeline {
             steps {
                 dir("${WORKSPACE}") {
                     sh '''
-                      echo "➡️ Docker Compose Down"
-                      docker compose down --remove-orphans
+                    echo "➡️ Forzando limpieza de contenedor previo"
+                    docker rm -f django_demo_web || true
 
-                      echo "➡️ Docker Compose Up --build"
-                      docker compose up -d --build
+                    echo "➡️ Docker Compose Down"
+                    docker compose down --remove-orphans
+
+                    echo "➡️ Docker Compose Up --build"
+                    docker compose up -d --build
                     '''
 
                 }
